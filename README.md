@@ -25,7 +25,7 @@ Commands here are executed before joining channels.
 
 **on_pubmsg** is triggered on messages on channels.
 
-*More events are possible. Just **uncomment the 13th line** and check the output.*
+*More events are possible.* Just **uncomment the 13th line** and check the output.
 
 The standard 'help'-triggers are not really hardcoded.
 Every message with the beginning '!' will trigger the **on_pubmsg**.
