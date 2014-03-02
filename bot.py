@@ -48,11 +48,8 @@ class TestBot(irc.bot.SingleServerIRCBot):
         try:
             if re.match('^\!\w+', a):
                 self.do_command(e, a[1:], bc)
-            elif ''.join(a).find('kirika') != -1:
-                if e.target.lower() == '#terraria-support':
+            elif ''.join(a).find('kirika') != -1 and e.target.lower() == '#terraria-support':
                     c.privmsg(e.target, 'If you need help, type !help')
-                elif  e.target.lower() != '#terraria':
-                    c.privmsg(e.target, config.get('rest', 'contact'))
         except TypeError:
             pass
 
