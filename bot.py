@@ -6,7 +6,7 @@ import irc.strings
 import re
 import logging
 import configparser
-from time import sleep
+from time import sleep, gmtime, strftime
 from multiprocessing import Process
 from irc.client import ip_numstr_to_quad, ip_quad_to_numstr
 irc.client.ServerConnection.buffer_class.errors = 'ignore'
@@ -33,23 +33,52 @@ class TestBot(irc.bot.SingleServerIRCBot):
         c.privmsg('nickserv', 'identify ' + config.get('rest', 'nickserv'))
         c.join(self.channel)
 
-    def on_join(self, c, e):
-        if 'kirika' != e.source.nick.lower() and e.target == '#terraria-support':
+    def on_part(self, c, e):
+        if 'kirika' != e.source.nick.lower() and e.target.lower() == '#terraria':
             nick = e.source.nick
-            for msg in config.options('support'):
-                c.notice(nick, config.get('support', msg))
+            with open('join.log', 'a') as join:
+                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has left', file=join)
+            with open('terraria.log', 'a') as chan:
+                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has left', file=chan)
+
+    def on_join(self, c, e):
+        if 'kirika' != e.source.nick:
+            nick = e.source.nick
+            if e.target.lower() == '#terraria-support':
+                for msg in config.options('support'):
+                    c.notice(nick, config.get('support', msg))
+            elif e.target.lower() == '#terraria':
+                with open('join.log', 'a') as join:
+                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has joined', file=join)
+                with open('terraria.log', 'a') as chan:
+                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has joined', file=chan)
 
     def on_privmsg(self, c, e):
+        cmd = e.arguments[0]
         nick = e.source.nick
-        c.privmsg(nick, config.get('rest', 'privmsg'))
+        with open('query.log', 'a') as query:
+            print('<' + nick + '> ' + cmd, file=query)
+        try:
+            if config.get('admins', nick):
+                if cmd.split()[0] == 'say':
+                    say = ' '.join(cmd.split()[2:])
+                    c.privmsg(cmd.split()[1], say)
+                elif cmd.split()[0] == 'cmd':
+                    c.send_raw(cmd[4:])
+        except configparser.NoOptionError:
+            c.privmsg(nick, config.get('rest', 'privmsg'))
 
     def on_pubmsg(self, c, e):
         a = e.arguments[0]
+        nick = e.source.nick
         try:
             if re.match('^\!\w+', a):
                 self.do_command(e, a[1:], bc)
             elif ''.join(a).find('kirika') != -1 and e.target.lower() == '#terraria-support':
                     c.privmsg(e.target, 'If you need help, type !help')
+            elif e.target.lower() == '#terraria':
+                with open('terraria.log', 'a') as chan:
+                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' <' + nick + '> ' + a, file=chan)
         except TypeError:
             pass
 
@@ -79,13 +108,13 @@ class TestBot(irc.bot.SingleServerIRCBot):
     def bc_stream(self, e, game):
         c = self.connection
         while st.is_alive:
-            c.privmsg('#terraria', '10Yama will stream4 %s 10in a few minutes!' %game)
-            sleep(3)
+            c.privmsg('#Yamaria', '10Yama will stream4 %s 10in a few minutes!' %game)
+            sleep()
 
     def bc_stream2(self, e, game):
         c = self.connection
         while st2.is_alive:
-            c.privmsg('#terraria', '10Yama is streaming4 %s 10now: 4http://www.twitch.tv/Yamahi' %game)
+            c.privmsg('#Yamaria', '10Yama is streaming4 %s 10now: 4http://www.twitch.tv/Yamahi' %game)
             sleep(3)
 
     #Commands ------>
@@ -94,23 +123,17 @@ class TestBot(irc.bot.SingleServerIRCBot):
         c = self.connection
 
         #Help commands ------>
-        if e.target.lower() != '#yamaria':
-            if cmd.lower() in config.options('pubcmd'):
-                c.privmsg(e.target, config.get('pubcmd', cmd))
-        elif e.target.lower() == '#yamaria' and cmd in ['help', 'trigger']:
-            c.privmsg(e.target, config.get('rest', 'support'))
+        if cmd.lower() in config.options('pubcmd'):
+            c.privmsg(e.target, config.get('pubcmd', cmd))
 
         #Admin commands ------>
-        if e.target.lower() == '#terraria':
+        elif e.target.lower() == '#terraria':
             if cmd == 'disconnect':
                 self.disconnect()
-            elif cmd == 'exit' and nick == 'Yama':
+            elif cmd == 'quit' and nick == 'Yama':
                 self.die()
             elif cmd in config.options('admcmd'):
                 c.privmsg('#Yamaria', config.get('admcmd', cmd))
-            elif cmd.split()[0] == 'say':
-                say = ' '.join(cmd.split()[2:])
-                c.privmsg(cmd.split()[1], say)
 
             #Broadcasts ------>
             elif 'bc' == cmd.split(' ')[0]:
