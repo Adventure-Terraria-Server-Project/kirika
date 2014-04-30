@@ -9,11 +9,11 @@ import configparser
 from time import sleep, gmtime, strftime
 from multiprocessing import Process
 from irc.client import ip_numstr_to_quad, ip_quad_to_numstr
+
 irc.client.ServerConnection.buffer_class.errors = 'ignore'
 #logging.basicConfig(level=logging.DEBUG)
 config = configparser.ConfigParser()
-config.read('cmds.ini')
-bc = 0
+config.read('msg.ini')
 wr = 0
 bc_t = False
 bc_y = False
@@ -21,7 +21,7 @@ bc_wr = False
 bc_st = False
 bc_st2 = False
 
-class TestBot(irc.bot.SingleServerIRCBot):
+class kirika(irc.bot.SingleServerIRCBot):
     def __init__(self, channel, nickname, server, port=6667):
         irc.bot.SingleServerIRCBot.__init__(self, [(server, port)], nickname, nickname)
         self.channel = channel
@@ -30,16 +30,18 @@ class TestBot(irc.bot.SingleServerIRCBot):
         c.nick(c.get_nickname() + "_")
 
     def on_welcome(self, c, e):
-        c.privmsg('nickserv', 'identify ' + config.get('rest', 'nickserv'))
+        config.read('config.ini')
+        c.mode(c.nick, '+B')
+        c.privmsg('nickserv', 'identify ' + config.get('server', 'nickserv'))
         c.join(self.channel)
 
     def on_part(self, c, e):
         if 'kirika' != e.source.nick.lower() and e.target.lower() == '#terraria':
             nick = e.source.nick
             with open('join.log', 'a') as join:
-                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has left', file=join)
+                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has left<br>', file=join)
             with open('terraria.log', 'a') as chan:
-                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has left', file=chan)
+                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has left<br>', file=chan)
 
     def on_join(self, c, e):
         if 'kirika' != e.source.nick:
@@ -49,43 +51,47 @@ class TestBot(irc.bot.SingleServerIRCBot):
                     c.notice(nick, config.get('support', msg))
             elif e.target.lower() == '#terraria':
                 with open('join.log', 'a') as join:
-                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has joined', file=join)
+                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has joined<br>', file=join)
                 with open('terraria.log', 'a') as chan:
-                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + nick + ' has joined', file=chan)
+                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has joined<br>', file=chan)
 
     def on_privmsg(self, c, e):
         cmd = e.arguments[0]
         nick = e.source.nick
         with open('query.log', 'a') as query:
-            print('<' + nick + '> ' + cmd, file=query)
-        try:
-            if config.get('admins', nick):
-                if cmd.split()[0] == 'say':
-                    say = ' '.join(cmd.split()[2:])
-                    c.privmsg(cmd.split()[1], say)
-                elif cmd.split()[0] == 'cmd':
-                    c.send_raw(cmd[4:])
-        except configparser.NoOptionError:
-            c.privmsg(nick, config.get('rest', 'privmsg'))
+            print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' &#60' + nick + '&#62 ' + cmd + '<br>', file=query)
+        for chname, chobj in self.channels.items():
+            users = ','.join(chobj.halfops())
+            users += ','.join(chobj.opers())
+            users += ','.join(chobj.owners())
+            if chname == '#terraria':
+                if nick in users:
+                    if cmd.split()[0] == 'say':
+                        say = ' '.join(cmd.split()[2:])
+                        c.privmsg(cmd.split()[1], say)
+                    elif cmd.split()[0] == 'cmd':
+                        c.send_raw(cmd[4:])
+                    return
+        c.privmsg(nick, config.get('rest', 'privmsg'))
 
     def on_pubmsg(self, c, e):
         a = e.arguments[0]
         nick = e.source.nick
         try:
             if re.match('^\!\w+', a):
-                self.do_command(e, a[1:], bc)
+                self.do_command(e, a[1:])
             elif ''.join(a).find('kirika') != -1 and e.target.lower() == '#terraria-support':
                     c.privmsg(e.target, 'If you need help, type !help')
-            elif e.target.lower() == '#terraria':
+            elif e.target.lower() == '#terraria' and nick != 'ATSP':
                 with open('terraria.log', 'a') as chan:
-                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' <' + nick + '> ' + a, file=chan)
+                    print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' &#60' + nick + '&#62 ' + a + '<br>', file=chan)
         except TypeError:
             pass
 
     #Broadcasts ------>
     def bc_terraria(self, e):
         c = self.connection
-        config.read('broadcasts.ini')
+        #config.read('broadcasts.ini')
         while t.is_alive:
             for i in config.options('#terraria'):
                 c.privmsg('#terraria', config.get('#terraria', i))
@@ -93,7 +99,7 @@ class TestBot(irc.bot.SingleServerIRCBot):
 
     def bc_yamaria(self, e):
         c = self.connection
-        config.read('broadcasts.ini')
+        #config.read('broadcasts.ini')
         while y.is_alive:
             for m in config.options('#Yamaria'):
                 c.privmsg('#Yamaria', config.get('#Yamaria', m))
@@ -118,7 +124,7 @@ class TestBot(irc.bot.SingleServerIRCBot):
             sleep(3)
 
     #Commands ------>
-    def do_command(self, e, cmd, bc):
+    def do_command(self, e, cmd):
         nick = e.source.nick
         c = self.connection
 
@@ -210,25 +216,18 @@ class TestBot(irc.bot.SingleServerIRCBot):
                         c.privmsg(e.target, '4Broadcast is still running, dood')
 
 def main():
-    import sys
-    if len(sys.argv) != 4:
-        print("Usage: testbot <server[:port]> <channel> <nickname>")
-        sys.exit(1)
-
-    s = sys.argv[1].split(":", 1)
-    server = s[0]
-    if len(s) == 2:
-        try:
-            port = int(s[1])
-        except ValueError:
-            print("Error: Erroneous port.")
-            sys.exit(1)
-    else:
+    config.read('config.ini')
+    server = config.get('server', 'ip')
+    s = config.get('server', 'port')
+    channel = config.get('server', 'channels')
+    nickname = config.get('server', 'nick')
+    try:
+        port = int(s)
+    except ValueError:
+        print("Error: Erroneous port, using 6667.")
         port = 6667
-    channel = sys.argv[2]
-    nickname = sys.argv[3]
 
-    bot = TestBot(channel, nickname, server, port)
+    bot = kirika(channel, nickname, server, port)
     bot.start()
 
 if __name__ == "__main__":
