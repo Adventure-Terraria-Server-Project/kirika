@@ -5,6 +5,7 @@ IRC-Bot with broadcast and triggers.
 ------------------------------------
 Designed to run with **Python 3**.  
 Coded with Python 3.3.
+Works also with Python 3.4
 
 Using [Jaraco IRC Module](https://bitbucket.org/jaraco/irc).  
 Based on [this example-script](https://bitbucket.org/jaraco/irc/src/5fb84776e69a3a5fe4f3e34f27571d3b575f2fab/scripts/testbot.py).
@@ -28,7 +29,7 @@ I did a lot for myself but it should be easy to modify it.
 -   `on_welcome`  
     is triggered on connecting to a server. Commands here are executed before joining channels.
 
-*More events are possible.* Just **uncomment the 14th line** and check the output.
+*More events are possible.* Just **uncomment the 13th line** and check the output.
 
 **Some background info**
 -   Server-Configuration is in *config.ini*.
