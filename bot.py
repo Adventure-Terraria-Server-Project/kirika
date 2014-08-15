@@ -38,31 +38,18 @@ class kirika(irc.bot.SingleServerIRCBot):
         c.privmsg('nickserv', 'identify ' + config.get('server', 'nickserv'))
         c.join(self.channel)
 
-    #def on_part(self, c, e):
-    #    if 'kirika' != e.source.nick.lower() and e.target.lower() == '#terraria':
-    #        nick = e.source.nick
-    #        with open('join.log', 'a') as join:
-    #            print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has left<br>', file=join)
-    #        with open('terraria.log', 'a') as chan:
-    #            print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has left<br>', file=chan)
-
     def on_join(self, c, e):
         if 'kirika' != e.source.nick:
             nick = e.source.nick
             if e.target.lower() == '#terraria-support':
                 for msg in config.options('support'):
                     c.notice(nick, config.get('support', msg))
-    #        elif e.target.lower() == '#terraria':
-    #            with open('join.log', 'a') as join:
-    #                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has joined<br>', file=join)
-    #            with open('terraria.log', 'a') as chan:
-    #                print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' ' + nick + ' has joined<br>', file=chan)
 
     def on_privmsg(self, c, e):
         cmd = e.arguments[0]
         nick = e.source.nick
         with open('logs/query.log', 'a') as query:
-            print(strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + ' &#60' + nick + '&#62 ' + cmd + '<br>', file=query)
+            print('<span style="color:green">' + strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + '</span> &#60<span style="color:blue">' + nick + '</span>&#62 ' + cmd + '<br>', file=query)
         for chname, chobj in self.channels.items():
             users = ','.join(chobj.halfops())
             users += ','.join(chobj.opers())
@@ -95,7 +82,7 @@ class kirika(irc.bot.SingleServerIRCBot):
                 open('logs/terraria-' + today + '.log', 'x')
                 os.remove('logs/terraria-' + strftime('%y.%m.%d', gmtime(time() - 259200)) + '.log')
             with open('logs/terraria-' + today + '.log', 'a') as chan:
-                print(strftime('%H:%M:%S', gmtime()) + ' &#60' + nick + '&#62 ' + a.replace('<', '&#60').replace('>', '&#62') + '<br>', file=chan)
+                print('<span style="color:green">' + strftime('%H:%M:%S', gmtime()) + '</span> &#60<span style="color:blue">' + nick + '</span>&#62 ' + a.replace('<', '&#60').replace('>', '&#62') + '<br>', file=chan)
 
     # Broadcasts ------>
     def bc_terraria(self, e):
