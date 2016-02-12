@@ -3,19 +3,18 @@
 
 import re
 import os
+import csv
+import msgs
+import config
+import random
 import irc.bot
-import logging
 import requests
 import irc.strings
-import configparser
 from time import time, sleep, gmtime, strftime
-from multiprocessing import Process
+from threading import Thread
 from irc.client import ip_numstr_to_quad, ip_quad_to_numstr
 
 irc.client.ServerConnection.buffer_class.errors = 'ignore'
-#logging.basicConfig(level=logging.DEBUG)
-config = configparser.ConfigParser()
-config.read('msg.ini')
 wr = 0
 bc_t = False
 bc_y = False
@@ -33,23 +32,27 @@ class kirika(irc.bot.SingleServerIRCBot):
         c.nick(c.get_nickname() + "_")
 
     def on_welcome(self, c, e):
-        config.read('config.ini')
-        c.mode('kirika', '+B')
-        c.privmsg('nickserv', 'identify ' + config.get('server', 'nickserv'))
+        #config.read('config.ini')
+        c.mode(config.nick, '+B')
+        c.privmsg('nickserv', 'identify ' + config.nickserv)
         c.join(self.channel)
+        words = self.get_words(e)
+        global slogans
+        slogans = Thread(target=self.slogan, args=(e, words))
+        slogans.start()
 
     def on_join(self, c, e):
         if 'kirika' != e.source.nick:
             nick = e.source.nick
             if e.target.lower() == '#terraria-support':
-                for msg in config.options('support'):
-                    c.notice(nick, config.get('support', msg))
+                for msg in msgs.support:
+                    c.notice(nick, msg)
 
     def on_privmsg(self, c, e):
         cmd = e.arguments[0]
         nick = e.source.nick
         with open('logs/query.log', 'a') as query:
-            print('<span style="color:green">' + strftime('%Y.%m.%d - %H:%M:%S', gmtime()) + '</span> &#60<span style="color:blue">' + nick + '</span>&#62 ' + cmd + '<br>', file=query)
+            print('<span style="color:green">%s</span> &#60;<span style="color:blue">%s</span>&#62; %s<br>' % (strftime('%Y.%m.%d - %H:%M:%S', gmtime()), nick, cmd), file=query)
         for chname, chobj in self.channels.items():
             users = ','.join(chobj.halfops())
             users += ','.join(chobj.opers())
@@ -61,11 +64,6 @@ class kirika(irc.bot.SingleServerIRCBot):
                         c.privmsg(cmd.split()[1], say)
                     elif cmd.split()[0] == 'cmd':
                         c.send_raw(cmd[4:])
-                    elif cmd.split()[0] == 'yo':
-                        try:
-                            requests.post("http://api.justyo.co/yo/", data={'api_token': yo_token, 'username': cmd.split()[1]})
-                        except:
-                            requests.post("http://api.justyo.co/yoall/", data={'api_token': yo_token})
                     return
         c.privmsg(nick, config.get('rest', 'privmsg'))
 
@@ -78,25 +76,44 @@ class kirika(irc.bot.SingleServerIRCBot):
                 c.privmsg(e.target, 'If you need help, type !help')
         elif e.target.lower() == '#terraria' and nick != 'ATSP':
             today = strftime('%y.%m.%d', gmtime())
-            if not os.path.exists('logs/terraria-' + today + '.log'):
-                open('logs/terraria-' + today + '.log', 'x')
-                os.remove('logs/terraria-' + strftime('%y.%m.%d', gmtime(time() - 259200)) + '.log')
-            with open('logs/terraria-' + today + '.log', 'a') as chan:
-                print('<span style="color:green">' + strftime('%H:%M:%S', gmtime()) + '</span> &#60<span style="color:blue">' + nick + '</span>&#62 ' + a.replace('<', '&#60').replace('>', '&#62') + '<br>', file=chan)
+            if not os.path.exists('logs/terraria-%s.log' % today):
+                open('logs/terraria-%s.log' % today, 'x')
+                os.remove('logs/terraria-%s.log' % strftime('%y.%m.%d', gmtime(time() - 259200)))
+            with open('logs/terraria-%s.log' % today, 'a') as chan:
+                print('<span style="color:green">%s</span> &#60;<span style="color:blue">%s</span>&#62; %s<br>' % strftime('%H:%M:%S', gmtime()), nick, a.replace('<', '&#60;').replace('>', '&#62;'), file=chan)
+
+    def get_words(self, e):
+        words = list()
+        with open(config.itemlist) as itemsfile:
+            itemsreader = csv.reader(itemsfile, delimiter=',', quotechar='"')
+            for row in itemsreader:
+                words.append(row[1])
+        return words
+
+    def slogan(self, e, words):
+        c = self.connection
+        while slogans.is_alive:
+            sleep(10800)
+            get = requests.get('http://www.sloganizer.net/en/outbound.php?slogan=%s' % random.choice(words))
+            slog = str(get.text)
+            slog = slog.replace("'", '"').replace('\\', '')
+            slog = re.sub('<[^<]+?>', '', slog)
+            slog = slog.replace('"', "'")
+            c.privmsg('#Yamaria', slog)
 
     # Broadcasts ------>
     def bc_terraria(self, e):
         c = self.connection
         while t.is_alive:
-            for i in config.options('#terraria'):
-                c.privmsg('#terraria', config.get('#terraria', i))
+            for msg in msgs.broadcasts.terraria:
+                c.privmsg('#terraria', msg)
                 sleep(10)
 
     def bc_yamaria(self, e):
         c = self.connection
         while y.is_alive:
-            for m in config.options('#Yamaria'):
-                c.privmsg('#Yamaria', config.get('#Yamaria', m))
+            for msg in msgs.broadcasts.yamaria:
+                c.privmsg('#Yamaria', msg)
                 sleep(300)
 
     def bc_worldreset(self, e):
@@ -105,40 +122,27 @@ class kirika(irc.bot.SingleServerIRCBot):
             c.privmsg('#Yamaria', '#10We are preparing the new World. You will be informed, if the server is free to join.')
             sleep(120)
 
-    def bc_stream(self, e, game):
-        c = self.connection
-        requests.post("http://api.justyo.co/yoall/", data={'api_token': yo_token})
-        while st.is_alive:
-            c.privmsg('#Yamaria', '#10Yama will stream4 %s 10in a few minutes!' % game)
-            sleep(360)
-
-    def bc_stream2(self, e, game):
-        c = self.connection
-        requests.post("http://api.justyo.co/yoall/", data={'api_token': yo_token})
-        while st2.is_alive:
-            c.privmsg('#Yamaria', '#10Yama is streaming4 %s 10now: 4http://www.twitch.tv/Yamahi' % game)
-            sleep(360)
-
     # Commands ------>
     def do_command(self, e, cmd):
         nick = e.source.nick
         c = self.connection
 
         # Help commands ------>
-        if cmd.lower() in config.options('pubcmd'):
-            c.privmsg(e.target, config.get('pubcmd', cmd))
+        cmd = cmd.lower()
+        if cmd in msgs.pubcmd.keys():
+            c.privmsg(e.target, msgs.pubcmd[cmd])
 
         # Admin commands ------>
         elif e.target.lower() == '#terraria':
             if cmd == 'reload':
-                config.read('msg.ini')
+                reload(msgs)
                 c.privmsg('#terraria', '4Broadcast Messages Reloaded')
             elif cmd == 'disconnect':
                 self.disconnect()
             elif cmd == 'quit' and nick == 'Yama':
                 self.die()
-            elif cmd in config.options('admcmd'):
-                c.privmsg('#Yamaria', config.get('admcmd', cmd))
+            elif cmd in msgs.admcmd.keys():
+                c.privmsg('#Yamaria', msgs.admcmd[cmd])
 
             # Broadcasts ------>
             elif 'bc' == cmd.split(' ')[0]:
@@ -151,12 +155,12 @@ class kirika(irc.bot.SingleServerIRCBot):
                             c.privmsg(e.target, '4#Terraria Broadcast halted')
                     elif not bc_t:
                         bc_t = True
-                        t = Process(target=self.bc_terraria, args=(e,))
+                        t = Thread(target=self.bc_terraria, args=(e,))
                         t.start()
                     else:
                         c.privmsg(e.target, '4Broadcast is still running, dood')
 
-                elif '#Yamaria' == cmd.split(' ')[1]:
+                elif '#yamaria' == cmd.split(' ')[1]:
                     global bc_y, y
                     if 'stop' in cmd:
                         if bc_y:
@@ -165,7 +169,7 @@ class kirika(irc.bot.SingleServerIRCBot):
                             c.privmsg(e.target, '4#Yamaria Broadcast halted')
                     elif not bc_y:
                         bc_y = True
-                        y = Process(target=self.bc_yamaria, args=(e,))
+                        y = Thread(target=self.bc_yamaria, args=(e,))
                         y.start()
                     else:
                         c.privmsg(e.target, '4Broadcast is still running, dood')
@@ -179,50 +183,17 @@ class kirika(irc.bot.SingleServerIRCBot):
                             c.privmsg('#Yamaria', '#4You can join the server now!')
                     elif not bc_wr:
                         bc_wr = True
-                        wr = Process(target=self.bc_worldreset, args=(e,))
+                        wr = Thread(target=self.bc_worldreset, args=(e,))
                         wr.start()
-                    else:
-                        c.privmsg(e.target, '4Broadcast is still running, dood')
-
-                elif 'stream' == cmd.split(' ')[1]:
-                    global bc_st, st
-                    if 'stop' in cmd:
-                        if bc_st:
-                            bc_st = False
-                            st.terminate()
-                            c.privmsg(e.target, '4Stream-Broadcast halted')
-                    elif not bc_st:
-                        bc_st = True
-                        game = ' '.join(cmd.split(' ')[2:])
-                        st = Process(target=self.bc_stream, args=(e, game))
-                        st.start()
-                    else:
-                        c.privmsg(e.target, '4Broadcast is still running, dood')
-
-                elif 'stream2' == cmd.split(' ')[1]:
-                    global bc_st2, st2
-                    if 'stop' in cmd:
-                        if bc_st2:
-                            bc_st2 = False
-                            st2.terminate()
-                            c.privmsg(e.target, '4Stream2-Broadcast halted')
-                    elif not bc_st2:
-                        bc_st2 = True
-                        game = ' '.join(cmd.split(' ')[2:])
-                        st2 = Process(target=self.bc_stream2, args=(e, game))
-                        st2.start()
                     else:
                         c.privmsg(e.target, '4Broadcast is still running, dood')
 
 
 def main():
-    config.read('config.ini')
-    server = config.get('server', 'ip')
-    s = config.get('server', 'port')
-    channel = config.get('server', 'channels')
-    nickname = config.get('server', 'nick')
-    global yo_token
-    yo_token = config.get('server', 'yo_token')
+    server = config.ip
+    s = config.port
+    channel = config.channels
+    nickname = config.nick
     try:
         port = int(s)
     except ValueError:
